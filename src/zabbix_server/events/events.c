@@ -70,7 +70,45 @@ static zbx_vector_db_event_t	events;
 static zbx_hashset_t		event_recovery;
 static zbx_hashset_t		correlation_cache;
 static zbx_correlation_rules_t	correlation_rules;
+static zbx_hashset_t	events_index;
 
+typedef struct
+{
+	unsigned char   source;
+	unsigned char   object;
+	zbx_uint64_t    objectid;
+} zbx_event_key_t;
+
+typedef struct
+{
+	zbx_event_key_t key;
+	zbx_db_event    *event;
+} zbx_event_map_t;
+
+static zbx_hash_t event_key_hash(const void *data)
+{
+	const zbx_event_key_t *k = data;
+	zbx_uint64_t t = ((zbx_uint64_t)k->source << 56) |
+	                 ((zbx_uint64_t)k->object << 48) |
+	                 k->objectid;
+
+	return zbx_hash_splittable64(&t);
+}
+
+static int event_key_compare(const void *d1, const void *d2)
+{
+	const zbx_event_key_t *k1 = d1, *k2 = d2;
+
+	if (k1->source != k2->source)
+		return (int)k1->source - (int)k2->source;
+	if (k1->object != k2->object)
+		return (int)k1->object - (int)k2->object;
+	if (k1->objectid < k2->objectid)
+		return -1;
+	if (k1->objectid > k2->objectid)
+		return 1;
+	return 0;
+}
 /******************************************************************************
  *                                                                            *
  * Purpose: Check that tag name is not empty and that tag is not duplicate.   *
@@ -495,8 +533,11 @@ zbx_db_event	*zbx_add_event(unsigned char source, unsigned char object, zbx_uint
 		zbx_vector_item_tag_destroy(&item_tags);
 	}
 
-	zbx_vector_db_event_append(&events, event);
-	zbx_dc_close_user_macros(um_handle);
+       zbx_vector_db_event_append(&events, event);
+
+       zbx_event_map_t map = {{source, object, objectid}, event};
+       zbx_hashset_insert(&events_index, &map, sizeof(map));
+       zbx_dc_close_user_macros(um_handle);
 
 	return event;
 }
@@ -809,16 +850,11 @@ static void	save_event_recovery(void)
  ******************************************************************************/
 static zbx_db_event	*get_event_by_source_object_id(int source, int object, zbx_uint64_t objectid)
 {
-	int		i;
-	zbx_db_event	*event;
+zbx_event_key_t	key = {source, object, objectid};
+	zbx_event_map_t	*entry;
 
-	for (i = 0; i < events.values_num; i++)
-	{
-		event = events.values[i];
-
-		if (event->source == source && event->object == object && event->objectid == objectid)
-			return event;
-	}
+	if ((entry = (zbx_event_map_t *)zbx_hashset_search(&events_index, &key)) != NULL)
+		return entry->event;
 
 	return NULL;
 }
@@ -1857,11 +1893,12 @@ static void	update_trigger_changes(zbx_vector_trigger_diff_ptr_t *trigger_diff)
  ******************************************************************************/
 void	zbx_initialize_events(void)
 {
-	zbx_vector_db_event_create(&events);
-	zbx_hashset_create(&event_recovery, 0, ZBX_DEFAULT_UINT64_HASH_FUNC, ZBX_DEFAULT_UINT64_COMPARE_FUNC);
-	zbx_hashset_create(&correlation_cache, 0, ZBX_DEFAULT_UINT64_HASH_FUNC, ZBX_DEFAULT_UINT64_COMPARE_FUNC);
+       zbx_vector_db_event_create(&events);
+       zbx_hashset_create(&event_recovery, 0, ZBX_DEFAULT_UINT64_HASH_FUNC, ZBX_DEFAULT_UINT64_COMPARE_FUNC);
+       zbx_hashset_create(&correlation_cache, 0, ZBX_DEFAULT_UINT64_HASH_FUNC, ZBX_DEFAULT_UINT64_COMPARE_FUNC);
+       zbx_hashset_create(&events_index, 0, event_key_hash, event_key_compare);
 
-	zbx_dc_correlation_rules_init(&correlation_rules);
+       zbx_dc_correlation_rules_init(&correlation_rules);
 }
 
 /******************************************************************************
@@ -1871,11 +1908,12 @@ void	zbx_initialize_events(void)
  ******************************************************************************/
 void	zbx_uninitialize_events(void)
 {
-	zbx_vector_db_event_destroy(&events);
-	zbx_hashset_destroy(&event_recovery);
-	zbx_hashset_destroy(&correlation_cache);
+       zbx_vector_db_event_destroy(&events);
+       zbx_hashset_destroy(&event_recovery);
+       zbx_hashset_destroy(&correlation_cache);
+       zbx_hashset_destroy(&events_index);
 
-	zbx_dc_correlation_rules_free(&correlation_rules);
+       zbx_dc_correlation_rules_free(&correlation_rules);
 }
 
 /******************************************************************************
@@ -1925,9 +1963,10 @@ static void	zbx_clean_event(zbx_db_event *event)
  ******************************************************************************/
 void	zbx_clean_events(void)
 {
-	zbx_vector_db_event_clear_ext(&events, zbx_clean_event);
+    zbx_vector_db_event_clear_ext(&events, zbx_clean_event);
+    zbx_hashset_clear(&events_index);
 
-	zbx_reset_event_recovery();
+    zbx_reset_event_recovery();
 }
 
 /******************************************************************************

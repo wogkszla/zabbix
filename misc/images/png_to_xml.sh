@@ -12,8 +12,9 @@ echo '<?xml version="1.0" encoding="UTF-8"?>
 <zabbix_export version="1.0" date="'$(date "+%d.%m.%y")'" time="'$(date "+%H.%M")'">
   <images>' > "$outputfile"
 
-imagecount=$(ls $imagedir/*.png | wc -l)
-for imagefile in $imagedir/*.png; do
+imagecount=$(find "$imagedir" -name '*.png' | wc -l)
+# Use 'find' to correctly handle file names containing spaces
+find "$imagedir" -name '*.png' -print0 | while IFS= read -r -d '' imagefile; do
 	((imagesdone++))
 	echo "    <image>
       <name>$(basename "${imagefile%.png}")</name>

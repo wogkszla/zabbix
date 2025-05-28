@@ -3,7 +3,7 @@
 # A script to generate SQL from PNG images
 # depends on hexdump and base64
 
-scriptdir="$(dirname $0)"
+scriptdir="$(dirname "$0")"
 pngdir="${1:-png_modern}"
 sqlbasedir="$scriptdir/../../database"
 imagefile="images.sql"
@@ -21,11 +21,9 @@ done
 echo "Generating SQL files"
 
 
-imagecount=$(ls $pngdir/*.png | wc -l)
-
-# TODO: this loop won't work with directory names, containing spaces
-# using 'find' here seems to be a bit excessive for now
-for imagefile in $pngdir/*.png; do
+imagecount=$(find "$pngdir" -name '*.png' | wc -l)
+# Use 'find' to correctly handle file names containing spaces
+find "$pngdir" -name '*.png' -print0 | while IFS= read -r -d '' imagefile; do
 	((imagesdone++))
 	imagename="$(basename "${imagefile%.png}")"
 	image_data=$(hexdump -ve '"" 1/1 "%02X"' "$imagefile")

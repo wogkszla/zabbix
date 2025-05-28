@@ -12,7 +12,12 @@ DEFAULT_CONFIG = Path("/etc/zabbix/zabbix_server.conf")
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="zabbix_server")
-    parser.add_argument("-c", "--config", help="path to config file")
+    parser.add_argument(
+        "-c",
+        "--config",
+        default=str(DEFAULT_CONFIG),
+        help="path to config file",
+    )
     parser.add_argument("-R", "--runtime-control", help="runtime control command")
     parser.add_argument("-T", "--test-config", action="store_true", help="test configuration and exit")
     parser.add_argument("-f", "--foreground", action="store_true", help="run in foreground")
@@ -32,10 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Zabbix Server (Python rewrite)")
         return 0
 
-    if args.config:
-        config_path = Path(args.config)
-    else:
-        config_path = DEFAULT_CONFIG
+    config_path = Path(args.config)
 
     # load configuration (placeholder)
     load_config(config_path)

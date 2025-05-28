@@ -1,0 +1,2 @@
+Vector lookup time: 0.101s
+Hash-set lookup time: 0.000s

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .config import load_config
+from .postinit import run_postinit_tasks
 
 DEFAULT_CONFIG = Path("/etc/zabbix/zabbix_server.conf")
 
@@ -45,6 +46,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.test_config:
         print("Validation successful")
         return 0
+
+    # run initialization routines mirrored from postinit.c
+    run_postinit_tasks()
 
     # TODO: initialization logic goes here
     print("Starting server...")
